@@ -1,18 +1,55 @@
-"""
-网站管理系统 - 弹窗对话框
-包含：添加网站对话框、弃用原因对话框。
+"""网站管理系统 —— 弹窗对话框。
+
+本模块提供两个模态对话框：
+
+- :class:`AddSiteDialog`: 录入新网站，网站名与网址为必填项。
+- :class:`ReasonDialog`: 填写弃用原因，原因为必填项。
+
+两者均继承自 :class:`tkinter.Toplevel`，通过 ``transient`` + ``grab_set``
+实现模态效果；确认后由调用方通过回调刷新列表。
 """
 
+from __future__ import annotations
+
 import tkinter as tk
-from tkinter import ttk, messagebox
+from collections.abc import Callable
+from tkinter import messagebox, ttk
 
 from wm.operations import add_site
 
+__all__ = ["AddSiteDialog", "ReasonDialog"]
+
+
+def _center_over(master: tk.Misc, window: tk.Toplevel) -> None:
+    """把窗口定位到父窗口的偏上居中位置。
+
+    Args:
+        master: 父窗口，作为定位参照。
+        window: 待定位的窗口（通常是对话框自身）。
+    """
+    x = master.winfo_rootx() + (master.winfo_width() - window.winfo_width()) // 2
+    y = master.winfo_rooty() + (master.winfo_height() - window.winfo_height()) // 3
+    window.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+
 
 class AddSiteDialog(tk.Toplevel):
-    """录入对话框：网站名和网址必填，其余可选。"""
+    """录入对话框：网站名与网址必填，其余字段可选。
 
-    def __init__(self, master, on_saved):
+    Attributes:
+        on_saved (Callable[[], None]): 保存成功后的回调，用于让主窗口刷新列表。
+        var_name (tk.StringVar): 网站名输入值。
+        var_url (tk.StringVar): 网址输入值。
+        var_func (tk.StringVar): 功能输入值。
+        var_rem (tk.StringVar): 备注输入值。
+    """
+
+    def __init__(self, master: tk.Misc, on_saved: Callable[[], None]) -> None:
+        """构建并显示录入对话框。
+
+        Args:
+            master: 父窗口。
+            on_saved: 保存成功后的回调（通常为 ``主窗口.refresh``）。
+        """
         super().__init__(master)
         self.on_saved = on_saved
         self.title("添加网站")
@@ -58,14 +95,14 @@ class AddSiteDialog(tk.Toplevel):
         self.bind("<Escape>", lambda _e: self.destroy())
 
         self.update_idletasks()
-        self._center_on(master)
+        _center_over(master, self)
 
-    def _center_on(self, master):
-        x = master.winfo_rootx() + (master.winfo_width() - self.winfo_width()) // 2
-        y = master.winfo_rooty() + (master.winfo_height() - self.winfo_height()) // 3
-        self.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+    def _save(self) -> None:
+        """校验并提交录入请求。
 
-    def _save(self):
+        校验与写库由 :func:`wm.operations.add_site` 完成；成功时回调
+        ``on_saved`` 并关闭对话框，失败时以错误弹窗提示且保持对话框打开。
+        """
         data = {
             "site_name": self.var_name.get().strip(),
             "url": self.var_url.get().strip(),
@@ -82,9 +119,21 @@ class AddSiteDialog(tk.Toplevel):
 
 
 class ReasonDialog(tk.Toplevel):
-    """弃用原因对话框：必须填写原因。"""
+    """弃用原因对话框：必须填写原因后才能确认。
 
-    def __init__(self, master, count: int, on_ok):
+    Attributes:
+        on_ok (Callable[[str], None]): 确认后的回调，入参为用户填写的原因。
+        text (tk.Text): 原因输入框。
+    """
+
+    def __init__(self, master: tk.Misc, count: int, on_ok: Callable[[str], None]) -> None:
+        """构建并显示弃用确认对话框。
+
+        Args:
+            master: 父窗口。
+            count: 本次将要弃用的网站数量，仅用于提示文案。
+            on_ok: 确认后的回调，入参为去除首尾空白的原因文本。
+        """
         super().__init__(master)
         self.on_ok = on_ok
         self.title("弃用确认")
@@ -112,11 +161,13 @@ class ReasonDialog(tk.Toplevel):
         self.bind("<Escape>", lambda _e: self.destroy())
 
         self.update_idletasks()
-        x = master.winfo_rootx() + (master.winfo_width() - self.winfo_width()) // 2
-        y = master.winfo_rooty() + (master.winfo_height() - self.winfo_height()) // 3
-        self.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+        _center_over(master, self)
 
-    def _ok(self):
+    def _ok(self) -> None:
+        """校验原因非空后触发回调并关闭对话框。
+
+        原因为空时仅弹出提示，不关闭对话框，以便用户继续填写。
+        """
         reason = self.text.get("1.0", "end").strip()
         if not reason:
             messagebox.showwarning("提示", "请填写弃用原因", parent=self)
