@@ -1,0 +1,7 @@
+# WebSite_OfMine 运行依赖
+#
+# 说明：
+#   - tkinter / sqlite3 为 Python 标准库，无需在此声明。
+#   - 安装：pip install -r requirements.txt
+
+openpyxl>=3.1,<4.0
